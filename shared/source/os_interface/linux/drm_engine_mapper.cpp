@@ -17,10 +17,11 @@ namespace NEO {
 unsigned int DrmEngineMapper::engineNodeMap(aub_stream::EngineType engineType) {
     if (EngineHelpers::isCcs(engineType)) {
         return I915_EXEC_DEFAULT;
-    } else if (aub_stream::ENGINE_BCS == engineType || EngineHelpers::isLinkBcs(engineType)) {
+    } else if (aub_stream::ENGINE_RCS == engineType) {
+        return I915_EXEC_RENDER;
+    } else if (aub_stream::ENGINE_BCS == engineType) {
         return I915_EXEC_BLT;
     }
-    UNRECOVERABLE_IF(engineType != aub_stream::ENGINE_RCS && engineType != aub_stream::ENGINE_CCCS);
-    return I915_EXEC_RENDER;
+    UNRECOVERABLE_IF(true);
 }
 } // namespace NEO

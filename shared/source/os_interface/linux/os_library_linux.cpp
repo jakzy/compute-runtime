@@ -5,8 +5,11 @@
  *
  */
 
-#include "shared/source/os_interface/linux/os_library_linux.h"
-
+#ifdef NET_BSD
+    #include "shared/source/os_interface/netbsd/os_library_netbsd.h"
+#else
+    #include "shared/source/os_interface/linux/os_library_linux.h"
+#endif
 #include "shared/source/helpers/debug_helpers.h"
 #include "shared/source/os_interface/linux/sys_calls.h"
 
@@ -18,7 +21,13 @@ OsLibrary *OsLibrary::load(const std::string &name) {
 }
 
 OsLibrary *OsLibrary::load(const std::string &name, std::string *errorValue) {
+    
+    #ifdef NET_BSD
+    auto ptr = new (std::nothrow) NetBSD::OsLibrary(name, errorValue);
+    #else
     auto ptr = new (std::nothrow) Linux::OsLibrary(name, errorValue);
+    #endif
+
     if (ptr == nullptr)
         return nullptr;
 
@@ -33,7 +42,11 @@ const std::string OsLibrary::createFullSystemPath(const std::string &name) {
     return name;
 }
 
+#ifdef NET_BSD
+namespace NetBSD {
+#else
 namespace Linux {
+#endif
 
 OsLibrary::OsLibrary(const std::string &name, std::string *errorValue) {
     if (name.empty()) {

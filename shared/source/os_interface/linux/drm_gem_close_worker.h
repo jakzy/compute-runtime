@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -27,13 +27,13 @@ enum class gemCloseWorkerMode {
 class DrmGemCloseWorker {
   public:
     DrmGemCloseWorker(DrmMemoryManager &memoryManager);
-    MOCKABLE_VIRTUAL ~DrmGemCloseWorker();
+    ~DrmGemCloseWorker();
 
     DrmGemCloseWorker(const DrmGemCloseWorker &) = delete;
     DrmGemCloseWorker &operator=(const DrmGemCloseWorker &) = delete;
 
     void push(BufferObject *allocation);
-    MOCKABLE_VIRTUAL void close(bool blocking);
+    void close(bool blocking);
 
     bool isEmpty();
 

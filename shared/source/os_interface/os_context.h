@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -40,7 +40,6 @@ class OsContext : public ReferenceTrackedObject<OsContext> {
     bool isRegular() const { return engineUsage == EngineUsage::Regular; }
     bool isLowPriority() const { return engineUsage == EngineUsage::LowPriority; }
     bool isInternalEngine() const { return engineUsage == EngineUsage::Internal; }
-    bool isCooperativeEngine() const { return engineUsage == EngineUsage::Cooperative; }
     bool isRootDevice() const { return rootDevice; }
     bool isEngineInstanced() const { return engineInstancedDevice; }
     virtual bool isDirectSubmissionSupported(const HardwareInfo &hwInfo) const { return false; }
@@ -54,9 +53,6 @@ class OsContext : public ReferenceTrackedObject<OsContext> {
                                              aub_stream::EngineType contextEngineType,
                                              bool &startOnInit,
                                              bool &startInContext);
-    virtual void reInitializeContext() {}
-    uint8_t getUmdPowerHintValue() { return powerHintValue; }
-    void setUmdPowerHintValue(uint8_t powerHintValue) { this->powerHintValue = powerHintValue; }
 
   protected:
     virtual void initializeContext() {}
@@ -73,6 +69,5 @@ class OsContext : public ReferenceTrackedObject<OsContext> {
     std::once_flag contextInitializedFlag = {};
     bool contextInitialized = false;
     bool engineInstancedDevice = false;
-    uint8_t powerHintValue = 0;
 };
 } // namespace NEO

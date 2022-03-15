@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -54,10 +54,6 @@ WddmCommandStreamReceiver<GfxFamily>::WddmCommandStreamReceiver(ExecutionEnviron
 
     this->dispatchMode = DispatchMode::BatchedDispatch;
 
-    if (ApiSpecificConfig::getApiType() == ApiSpecificConfig::L0) {
-        this->dispatchMode = DispatchMode::ImmediateDispatch;
-    }
-
     if (DebugManager.flags.CsrDispatchMode.get()) {
         this->dispatchMode = (DispatchMode)DebugManager.flags.CsrDispatchMode.get();
     }
@@ -70,7 +66,7 @@ WddmCommandStreamReceiver<GfxFamily>::~WddmCommandStreamReceiver() {
 }
 
 template <typename GfxFamily>
-SubmissionStatus WddmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchBuffer, ResidencyContainer &allocationsForResidency) {
+bool WddmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchBuffer, ResidencyContainer &allocationsForResidency) {
     this->printDeviceIndex();
     auto commandStreamAddress = ptrOffset(batchBuffer.commandBufferAllocation->getGpuAddress(), batchBuffer.startOffset);
 
@@ -79,18 +75,10 @@ SubmissionStatus WddmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchB
     perfLogResidencyVariadicLog(wddm->getResidencyLogger(), "Wddm CSR processing residency set: %zu\n", allocationsForResidency.size());
     this->processResidency(allocationsForResidency, 0u);
     if (this->directSubmission.get()) {
-        bool ret = this->directSubmission->dispatchCommandBuffer(batchBuffer, *(this->flushStamp.get()));
-        if (ret == false) {
-            return SubmissionStatus::FAILED;
-        }
-        return SubmissionStatus::SUCCESS;
+        return this->directSubmission->dispatchCommandBuffer(batchBuffer, *(this->flushStamp.get()));
     }
     if (this->blitterDirectSubmission.get()) {
-        bool ret = this->blitterDirectSubmission->dispatchCommandBuffer(batchBuffer, *(this->flushStamp.get()));
-        if (ret == false) {
-            return SubmissionStatus::FAILED;
-        }
-        return SubmissionStatus::SUCCESS;
+        return this->blitterDirectSubmission->dispatchCommandBuffer(batchBuffer, *(this->flushStamp.get()));
     }
 
     COMMAND_BUFFER_HEADER *pHeader = reinterpret_cast<COMMAND_BUFFER_HEADER *>(commandBufferHeader);
@@ -122,11 +110,7 @@ SubmissionStatus WddmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchB
     auto status = wddm->submit(commandStreamAddress, batchBuffer.usedSize - batchBuffer.startOffset, commandBufferHeader, submitArgs);
 
     this->flushStamp->setStamp(submitArgs.monitorFence->lastSubmittedFence);
-    if (status == false) {
-        return SubmissionStatus::FAILED;
-    }
-
-    return SubmissionStatus::SUCCESS;
+    return status;
 }
 
 template <typename GfxFamily>
@@ -167,9 +151,9 @@ GmmPageTableMngr *WddmCommandStreamReceiver<GfxFamily>::createPageTableManager()
 template <typename GfxFamily>
 void WddmCommandStreamReceiver<GfxFamily>::kmDafLockAllocations(ResidencyContainer &allocationsForResidency) {
     for (auto &graphicsAllocation : allocationsForResidency) {
-        if ((AllocationType::LINEAR_STREAM == graphicsAllocation->getAllocationType()) ||
-            (AllocationType::FILL_PATTERN == graphicsAllocation->getAllocationType()) ||
-            (AllocationType::COMMAND_BUFFER == graphicsAllocation->getAllocationType())) {
+        if ((GraphicsAllocation::AllocationType::LINEAR_STREAM == graphicsAllocation->getAllocationType()) ||
+            (GraphicsAllocation::AllocationType::FILL_PATTERN == graphicsAllocation->getAllocationType()) ||
+            (GraphicsAllocation::AllocationType::COMMAND_BUFFER == graphicsAllocation->getAllocationType())) {
             wddm->kmDafLock(static_cast<WddmAllocation *>(graphicsAllocation)->getDefaultHandle());
         }
     }

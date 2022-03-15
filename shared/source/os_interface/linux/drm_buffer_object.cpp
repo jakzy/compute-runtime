@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -12,7 +12,6 @@
 #include "shared/source/os_interface/linux/drm_memory_manager.h"
 #include "shared/source/os_interface/linux/drm_memory_operations_handler.h"
 #include "shared/source/os_interface/linux/drm_neo.h"
-#include "shared/source/os_interface/linux/ioctl_helper.h"
 #include "shared/source/os_interface/linux/os_context_linux.h"
 #include "shared/source/os_interface/linux/os_time_linux.h"
 #include "shared/source/os_interface/os_context.h"
@@ -34,11 +33,10 @@
 namespace NEO {
 
 BufferObject::BufferObject(Drm *drm, int handle, size_t size, size_t maxOsContextCount) : drm(drm), refCount(1), handle(handle), size(size), isReused(false) {
-    this->tilingMode = I915_TILING_NONE;
+    this->tiling_mode = I915_TILING_NONE;
     this->lockedAddress = nullptr;
 
     perContextVmsUsed = drm->isPerContextVMRequired();
-    requiresExplicitResidency = drm->hasPageFaultSupport();
 
     if (perContextVmsUsed) {
         bindInfo.resize(maxOsContextCount);
@@ -86,7 +84,7 @@ int BufferObject::wait(int64_t timeoutNs) {
 }
 
 bool BufferObject::setTiling(uint32_t mode, uint32_t stride) {
-    if (this->tilingMode == mode) {
+    if (this->tiling_mode == mode) {
         return true;
     }
 
@@ -99,7 +97,7 @@ bool BufferObject::setTiling(uint32_t mode, uint32_t stride) {
         return false;
     }
 
-    this->tilingMode = set_tiling.tiling_mode;
+    this->tiling_mode = set_tiling.tiling_mode;
 
     return set_tiling.tiling_mode == mode;
 }
@@ -126,14 +124,10 @@ void BufferObject::fillExecObject(drm_i915_gem_exec_object2 &execObject, OsConte
     execObject.rsvd1 = drmContextId;
     execObject.rsvd2 = 0;
 
-    const auto osContextId = drm->isPerContextVMRequired() ? osContext->getContextId() : 0;
-    if (this->bindInfo[osContextId][vmHandleId]) {
-        execObject.handle = 0u;
-    }
+    this->fillExecObjectImpl(execObject, osContext, vmHandleId);
 }
 
-int BufferObject::exec(uint32_t used, size_t startOffset, unsigned int flags, bool requiresCoherency, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId,
-                       BufferObject *const residency[], size_t residencyCount, drm_i915_gem_exec_object2 *execObjectsStorage, uint64_t completionGpuAddress, uint32_t completionValue) {
+int BufferObject::exec(uint32_t used, size_t startOffset, unsigned int flags, bool requiresCoherency, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId, BufferObject *const residency[], size_t residencyCount, drm_i915_gem_exec_object2 *execObjectsStorage) {
     for (size_t i = 0; i < residencyCount; i++) {
         residency[i]->fillExecObject(execObjectsStorage[i], osContext, vmHandleId, drmContextId);
     }
@@ -154,8 +148,7 @@ int BufferObject::exec(uint32_t used, size_t startOffset, unsigned int flags, bo
         printExecutionBuffer(execbuf, residencyCount, execObjectsStorage, residency);
     }
 
-    auto ioctlHelper = drm->getIoctlHelper();
-    int ret = ioctlHelper->execBuffer(drm, &execbuf, completionGpuAddress, completionValue);
+    int ret = this->drm->ioctl(DRM_IOCTL_I915_GEM_EXECBUFFER2, &execbuf);
 
     if (ret != 0) {
         int err = this->drm->getErrno();
@@ -165,12 +158,12 @@ int BufferObject::exec(uint32_t used, size_t startOffset, unsigned int flags, bo
         }
 
         static_cast<DrmMemoryOperationsHandler *>(this->drm->getRootDeviceEnvironment().memoryOperationsInterface.get())->evictUnusedAllocations(false, true);
-        ret = ioctlHelper->execBuffer(drm, &execbuf, completionGpuAddress, completionValue);
+        ret = this->drm->ioctl(DRM_IOCTL_I915_GEM_EXECBUFFER2, &execbuf);
     }
 
     if (ret != 0) {
         static_cast<DrmMemoryOperationsHandler *>(this->drm->getRootDeviceEnvironment().memoryOperationsInterface.get())->evictUnusedAllocations(true, true);
-        ret = ioctlHelper->execBuffer(drm, &execbuf, completionGpuAddress, completionValue);
+        ret = this->drm->ioctl(DRM_IOCTL_I915_GEM_EXECBUFFER2, &execbuf);
     }
 
     if (ret == 0) {
@@ -182,35 +175,16 @@ int BufferObject::exec(uint32_t used, size_t startOffset, unsigned int flags, bo
     return err;
 }
 
-void BufferObject::printBOBindingResult(OsContext *osContext, uint32_t vmHandleId, bool bind, int retVal) {
-    if (retVal == 0) {
-        if (bind) {
-            PRINT_DEBUG_STRING(DebugManager.flags.PrintBOBindingResult.get(), stdout, "bind BO-%d to VM %u, drmVmId = %u, range: %llx - %llx, size: %lld, result: %d\n",
-                               this->handle, vmHandleId, static_cast<const OsContextLinux *>(osContext)->getDrmVmIds().size() ? static_cast<const OsContextLinux *>(osContext)->getDrmVmIds()[vmHandleId] : 0, this->gpuAddress, ptrOffset(this->gpuAddress, this->size), this->size, retVal);
-        } else {
-            PRINT_DEBUG_STRING(DebugManager.flags.PrintBOBindingResult.get(), stdout, "unbind BO-%d from VM %u, drmVmId = %u, range: %llx - %llx, size: %lld, result: %d\n",
-                               this->handle, vmHandleId, static_cast<const OsContextLinux *>(osContext)->getDrmVmIds().size() ? static_cast<const OsContextLinux *>(osContext)->getDrmVmIds()[vmHandleId] : 0, this->gpuAddress, ptrOffset(this->gpuAddress, this->size), this->size, retVal);
-        }
-    } else {
-        auto err = this->drm->getErrno();
-        if (bind) {
-            PRINT_DEBUG_STRING(DebugManager.flags.PrintBOBindingResult.get(), stderr, "bind BO-%d to VM %u, drmVmId = %u, range: %llx - %llx, size: %lld, result: %d, errno: %d(%s)\n",
-                               this->handle, vmHandleId, static_cast<const OsContextLinux *>(osContext)->getDrmVmIds().size() ? static_cast<const OsContextLinux *>(osContext)->getDrmVmIds()[vmHandleId] : 0, this->gpuAddress, ptrOffset(this->gpuAddress, this->size), this->size, retVal, err, strerror(err));
-        } else {
-            PRINT_DEBUG_STRING(DebugManager.flags.PrintBOBindingResult.get(), stderr, "unbind BO-%d from VM %u, drmVmId = %u, range: %llx - %llx, size: %lld, result: %d, errno: %d(%s)\n",
-                               this->handle, vmHandleId, static_cast<const OsContextLinux *>(osContext)->getDrmVmIds().size() ? static_cast<const OsContextLinux *>(osContext)->getDrmVmIds()[vmHandleId] : 0, this->gpuAddress, ptrOffset(this->gpuAddress, this->size), this->size, retVal, err, strerror(err));
-        }
-    }
-}
-
 int BufferObject::bind(OsContext *osContext, uint32_t vmHandleId) {
     int retVal = 0;
     auto contextId = getOsContextId(osContext);
     if (!this->bindInfo[contextId][vmHandleId]) {
         retVal = this->drm->bindBufferObject(osContext, vmHandleId, this);
-        if (DebugManager.flags.PrintBOBindingResult.get()) {
-            printBOBindingResult(osContext, vmHandleId, true, retVal);
-        }
+        auto err = this->drm->getErrno();
+
+        PRINT_DEBUG_STRING(DebugManager.flags.PrintBOBindingResult.get(), stderr, "bind BO-%d to VM %u, drmVmId = %u, range: %llx - %llx, size: %lld, result: %d, errno: %d(%s)\n",
+                           this->handle, vmHandleId, static_cast<const OsContextLinux *>(osContext)->getDrmVmIds().size() ? static_cast<const OsContextLinux *>(osContext)->getDrmVmIds()[vmHandleId] : 0, this->gpuAddress, ptrOffset(this->gpuAddress, this->size), this->size, retVal, err, strerror(err));
+
         if (!retVal) {
             this->bindInfo[contextId][vmHandleId] = true;
         }
@@ -223,9 +197,11 @@ int BufferObject::unbind(OsContext *osContext, uint32_t vmHandleId) {
     auto contextId = getOsContextId(osContext);
     if (this->bindInfo[contextId][vmHandleId]) {
         retVal = this->drm->unbindBufferObject(osContext, vmHandleId, this);
-        if (DebugManager.flags.PrintBOBindingResult.get()) {
-            printBOBindingResult(osContext, vmHandleId, false, retVal);
-        }
+        auto err = this->drm->getErrno();
+
+        PRINT_DEBUG_STRING(DebugManager.flags.PrintBOBindingResult.get(), stderr, "unbind BO-%d from VM %u, drmVmId = %u, range: %llx - %llx, size: %lld, result: %d, errno: %d(%s)\n",
+                           this->handle, vmHandleId, static_cast<const OsContextLinux *>(osContext)->getDrmVmIds().size() ? static_cast<const OsContextLinux *>(osContext)->getDrmVmIds()[vmHandleId] : 0, this->gpuAddress, ptrOffset(this->gpuAddress, this->size), this->size, retVal, err, strerror(err));
+
         if (!retVal) {
             this->bindInfo[contextId][vmHandleId] = false;
         }
@@ -282,7 +258,7 @@ int BufferObject::pin(BufferObject *const boToPin[], size_t numberOfBos, OsConte
         retVal = bindBOsWithinContext(boToPin, numberOfBos, osContext, vmHandleId);
     } else {
         StackVec<drm_i915_gem_exec_object2, maxFragmentsCount + 1> execObject(numberOfBos + 1);
-        retVal = this->exec(4u, 0u, 0u, false, osContext, vmHandleId, drmContextId, boToPin, numberOfBos, &execObject[0], 0, 0);
+        retVal = this->exec(4u, 0u, 0u, false, osContext, vmHandleId, drmContextId, boToPin, numberOfBos, &execObject[0]);
     }
 
     return retVal;
@@ -300,7 +276,7 @@ int BufferObject::validateHostPtr(BufferObject *const boToPin[], size_t numberOf
         }
     } else {
         StackVec<drm_i915_gem_exec_object2, maxFragmentsCount + 1> execObject(numberOfBos + 1);
-        retVal = this->exec(4u, 0u, 0u, false, osContext, vmHandleId, drmContextId, boToPin, numberOfBos, &execObject[0], 0, 0);
+        retVal = this->exec(4u, 0u, 0u, false, osContext, vmHandleId, drmContextId, boToPin, numberOfBos, &execObject[0]);
     }
 
     return retVal;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,8 +23,6 @@
 
 #include "sku_info.h"
 
-#include <cstdint>
-#include <limits>
 #include <memory>
 #include <mutex>
 
@@ -54,12 +52,10 @@ enum class HeapIndex : uint32_t;
 unsigned int readEnablePreemptionRegKey();
 unsigned int getPid();
 bool isShutdownInProgress();
-CREATECONTEXT_PVTDATA initPrivateData(OsContextWin &osContext);
 
 class Wddm : public DriverModel {
   public:
     static constexpr DriverModelType driverModelType = DriverModelType::WDDM;
-    static constexpr std::uint64_t gpuHangIndication{std::numeric_limits<std::uint64_t>::max()};
 
     typedef HRESULT(WINAPI *CreateDXGIFactoryFcn)(REFIID riid, void **ppFactory);
     typedef HRESULT(WINAPI *DXCoreCreateAdapterFactoryFcn)(REFIID riid, void **ppFactory);
@@ -90,7 +86,7 @@ class Wddm : public DriverModel {
     MOCKABLE_VIRTUAL void *lockResource(const D3DKMT_HANDLE &handle, bool applyMakeResidentPriorToLock, size_t size);
     MOCKABLE_VIRTUAL void unlockResource(const D3DKMT_HANDLE &handle);
     MOCKABLE_VIRTUAL void kmDafLock(D3DKMT_HANDLE handle);
-    MOCKABLE_VIRTUAL bool isKmDafEnabled() const { return featureTable->flags.ftrKmdDaf; }
+    MOCKABLE_VIRTUAL bool isKmDafEnabled() const { return featureTable->ftrKmdDaf; }
 
     MOCKABLE_VIRTUAL bool setAllocationPriority(const D3DKMT_HANDLE *handles, uint32_t allocationCount, uint32_t priority);
 
@@ -111,8 +107,6 @@ class Wddm : public DriverModel {
     MOCKABLE_VIRTUAL void virtualFree(void *ptr, size_t size);
 
     MOCKABLE_VIRTUAL bool isShutdownInProgress();
-
-    bool isGpuHangDetected(OsContext &osContext) override;
 
     bool configureDeviceAddressSpace();
     const FeatureTable &getFeatureTable() const {
@@ -195,7 +189,6 @@ class Wddm : public DriverModel {
     PhysicalDevicePciBusInfo getPciBusInfo() const override;
 
     size_t getMaxMemAllocSize() const override;
-    bool skipResourceCleanup() const override;
 
     static std::vector<std::unique_ptr<HwDeviceId>> discoverDevices(ExecutionEnvironment &executionEnvironment);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -11,8 +11,8 @@
 #include "shared/source/execution_environment/execution_environment.h"
 #include "shared/source/execution_environment/root_device_environment.h"
 #include "shared/source/helpers/engine_node_helper.h"
+#include "shared/source/helpers/hw_helper.h"
 #include "shared/source/helpers/hw_info.h"
-#include "shared/source/os_interface/hw_info_config.h"
 #include "shared/source/os_interface/linux/drm_neo.h"
 #include "shared/source/os_interface/os_context.h"
 #include "shared/source/os_interface/os_interface.h"
@@ -45,24 +45,19 @@ void OsContextLinux::initializeContext() {
         this->drmVmIds.resize(deviceBitfield.size(), 0);
     }
 
-    const auto numberOfCCS = drm.getRootDeviceEnvironment().getHardwareInfo()->gtSystemInfo.CCSInfo.NumberOfCCSEnabled;
-    const bool debuggableContext = drm.isContextDebugSupported() && drm.getRootDeviceEnvironment().executionEnvironment.isDebuggingEnabled() && !isInternalEngine();
-    const bool debuggableContextCooperative = debuggableContext && numberOfCCS > 0;
-
     for (auto deviceIndex = 0u; deviceIndex < deviceBitfield.size(); deviceIndex++) {
         if (deviceBitfield.test(deviceIndex)) {
             auto drmVmId = drm.getVirtualMemoryAddressSpace(deviceIndex);
-            auto drmContextId = drm.createDrmContext(drmVmId, drm.isVmBindAvailable(), isCooperativeEngine() || debuggableContextCooperative);
+            auto drmContextId = drm.createDrmContext(drmVmId, drm.isVmBindAvailable());
             if (drm.areNonPersistentContextsSupported()) {
                 drm.setNonPersistentContext(drmContextId);
             }
 
             if (drm.getRootDeviceEnvironment().executionEnvironment.isDebuggingEnabled()) {
                 drm.setUnrecoverableContext(drmContextId);
-            }
-
-            if (debuggableContext) {
-                drm.setContextDebugFlag(drmContextId);
+                if (!isInternalEngine()) {
+                    drm.setContextDebugFlag(drmContextId);
+                }
             }
 
             if (drm.isPreemptionSupported() && isLowPriority()) {
@@ -85,8 +80,8 @@ void OsContextLinux::initializeContext() {
 }
 
 bool OsContextLinux::isDirectSubmissionSupported(const HardwareInfo &hwInfo) const {
-    auto hwInfoConfig = HwInfoConfig::get(hwInfo.platform.eProductFamily);
-    return this->getDrm().isVmBindAvailable() && hwInfoConfig->isDirectSubmissionSupported(hwInfo);
+    auto &hwHelper = HwHelper::get(hwInfo.platform.eRenderCoreFamily);
+    return this->getDrm().isVmBindAvailable() && hwHelper.isDirectSubmissionSupported(hwInfo);
 }
 
 Drm &OsContextLinux::getDrm() const {
@@ -100,8 +95,6 @@ void OsContextLinux::waitForPagingFence() {
         }
     }
 }
-
-void OsContextLinux::reInitializeContext() {}
 
 OsContextLinux::~OsContextLinux() {
     if (contextInitialized) {

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019-2022 Intel Corporation
+# Copyright (C) 2019-2021 Intel Corporation
 #
 # SPDX-License-Identifier: MIT
 #
@@ -51,7 +51,7 @@ set(NEO_CORE_OS_INTERFACE_WDDM
     ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}wddm_additional_context_flags.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}wddm_allocation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}wddm_apply_additional_map_gpu_va_fields.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/wddm_engine_mapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}wddm_engine_mapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/d3dkmthk_wrapper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dxgi_wrapper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/deferrable_deletion_win.cpp
@@ -87,14 +87,13 @@ set(NEO_CORE_OS_INTERFACE_WDDM
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/set_gmm_input_args_${DRIVER_MODEL}.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/max_mem_alloc_size_${DRIVER_MODEL}.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/helper_${DRIVER_MODEL}.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/wddm/skip_resource_cleanup_${DRIVER_MODEL}.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}map_tile_instanced_allocation_${DRIVER_MODEL}.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/wddm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/wddm.h
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/wddm_defs.h
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/wddm_residency_logger.h
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm_memory_manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm_memory_manager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}wddm_memory_manager_allocate_in_device_pool.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/um_km_data_translator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/um_km_data_translator.h
     ${CMAKE_CURRENT_SOURCE_DIR}/wddm/create_um_km_data_translator.cpp
@@ -111,7 +110,6 @@ set(NEO_CORE_OS_INTERFACE_WDDM
     ${CMAKE_CURRENT_SOURCE_DIR}/windows_defs.h
     ${CMAKE_CURRENT_SOURCE_DIR}/windows_wrapper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/sys_calls_wrapper.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/wddm${BRANCH_DIR_SUFFIX}/init_context_private_data.cpp
 )
 
 if(NOT WIN32 AND NOT DISABLE_WDDM_LINUX)

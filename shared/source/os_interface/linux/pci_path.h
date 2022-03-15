@@ -13,6 +13,5 @@
 namespace NEO {
 
 std::optional<std::string> getPciPath(int deviceFd);
-std::optional<std::string> getPciLinkPath(int deviceFd);
 
-} // namespace NEO
+}

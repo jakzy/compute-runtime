@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -20,7 +20,6 @@ struct StateComputeModeProperties;
 struct PipelineSelectArgs;
 class OSInterface;
 class HwInfoConfig;
-enum class DriverModelType;
 
 extern HwInfoConfig *hwInfoConfigFactory[IGFX_MAX_PRODUCT];
 
@@ -29,7 +28,6 @@ class HwInfoConfig {
     static HwInfoConfig *get(PRODUCT_FAMILY product) {
         return hwInfoConfigFactory[product];
     }
-    static constexpr uint32_t uuidSize = 16u;
     int configureHwInfoWddm(const HardwareInfo *inHwInfo, HardwareInfo *outHwInfo, OSInterface *osIface);
     int configureHwInfoDrm(const HardwareInfo *inHwInfo, HardwareInfo *outHwInfo, OSInterface *osIface);
     virtual int configureHardwareCustom(HardwareInfo *hwInfo, OSInterface *osIface) = 0;
@@ -39,9 +37,9 @@ class HwInfoConfig {
     virtual uint64_t getDeviceMemCapabilities() = 0;
     virtual uint64_t getSingleDeviceSharedMemCapabilities() = 0;
     virtual uint64_t getCrossDeviceSharedMemCapabilities() = 0;
-    virtual uint64_t getSharedSystemMemCapabilities(const HardwareInfo *hwInfo) = 0;
     virtual void getKernelExtendedProperties(uint32_t *fp16, uint32_t *fp32, uint32_t *fp64) = 0;
-    virtual std::vector<int32_t> getKernelSupportedThreadArbitrationPolicies() = 0;
+    virtual std::vector<uint32_t> getKernelSupportedThreadArbitrationPolicies() = 0;
+    virtual uint64_t getSharedSystemMemCapabilities() = 0;
     virtual void convertTimestampsFromOaToCsDomain(uint64_t &timestampData) = 0;
     virtual uint32_t getDeviceMemoryMaxClkRate(const HardwareInfo *hwInfo) = 0;
     virtual bool isAdditionalStateBaseAddressWARequired(const HardwareInfo &hwInfo) const = 0;
@@ -57,17 +55,15 @@ class HwInfoConfig {
     virtual uint32_t getAubStreamSteppingFromHwRevId(const HardwareInfo &hwInfo) const = 0;
     virtual void setAdditionalPipelineSelectFields(void *pipelineSelectCmd, const PipelineSelectArgs &pipelineSelectArgs, const HardwareInfo &hwInfo) = 0;
     virtual bool isDefaultEngineTypeAdjustmentRequired(const HardwareInfo &hwInfo) const = 0;
-    virtual bool overrideGfxPartitionLayoutForWsl() const = 0;
     virtual std::string getDeviceMemoryName() const = 0;
     virtual bool isDisableOverdispatchAvailable(const HardwareInfo &hwInfo) const = 0;
-    virtual bool allowCompression(const HardwareInfo &hwInfo) const = 0;
+    virtual bool allowRenderCompression(const HardwareInfo &hwInfo) const = 0;
     virtual bool allowStatelessCompression(const HardwareInfo &hwInfo) const = 0;
     virtual LocalMemoryAccessMode getLocalMemoryAccessMode(const HardwareInfo &hwInfo) const = 0;
     virtual bool isAllocationSizeAdjustmentRequired(const HardwareInfo &hwInfo) const = 0;
     virtual bool isPrefetchDisablingRequired(const HardwareInfo &hwInfo) const = 0;
     virtual bool isNewResidencyModelSupported() const = 0;
-    virtual bool isDirectSubmissionSupported(const HardwareInfo &hwInfo) const = 0;
-    virtual std::pair<bool, bool> isPipeControlPriorToNonPipelinedStateCommandsWARequired(const HardwareInfo &hwInfo, bool isRcs) const = 0;
+    virtual bool isPipeControlPriorToNonPipelinedStateCommandsWARequired(const HardwareInfo &hwInfo, bool isRcs) const = 0;
     virtual bool heapInLocalMem(const HardwareInfo &hwInfo) const = 0;
     virtual void setCapabilityCoherencyFlag(const HardwareInfo &hwInfo, bool &coherencyFlag) = 0;
     virtual bool isAdditionalMediaSamplerProgrammingRequired() const = 0;
@@ -81,27 +77,12 @@ class HwInfoConfig {
     virtual bool isStorageInfoAdjustmentRequired() const = 0;
     virtual bool isBlitterForImagesSupported() const = 0;
     virtual bool isTile64With3DSurfaceOnBCSSupported(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isDcFlushAllowed() const = 0;
-    virtual uint32_t computeMaxNeededSubSliceSpace(const HardwareInfo &hwInfo) const = 0;
-    virtual bool getUuid(Device *device, std::array<uint8_t, HwInfoConfig::uuidSize> &uuid) const = 0;
-    virtual bool isFlushTaskAllowed() const = 0;
-    virtual bool programAllStateComputeCommandFields() const = 0;
-    virtual bool isSpecialPipelineSelectModeChanged(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isSystolicModeConfigurable(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isGlobalFenceAsPostSyncOperationInComputeWalkerRequired(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isComputeDispatchAllWalkerEnableInComputeWalkerRequired(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isGlobalFenceAsMiMemFenceCommandInCommandStreamRequired(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isAdjustProgrammableIdPreferredSlmSizeRequired(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isThreadEuRatio16ForScratchRequired(const HardwareInfo &hwInfo) const = 0;
-    virtual bool isComputeDispatchAllWalkerEnableInCfeStateRequired(const HardwareInfo &hwInfo) const = 0;
-
-    MOCKABLE_VIRTUAL ~HwInfoConfig() = default;
 
   protected:
     virtual LocalMemoryAccessMode getDefaultLocalMemoryAccessMode(const HardwareInfo &hwInfo) const = 0;
 
   public:
-    uint32_t threadsPerEu = 0u;
+    uint32_t threadsPerEu;
 };
 
 template <PRODUCT_FAMILY gfxProduct>
@@ -118,9 +99,9 @@ class HwInfoConfigHw : public HwInfoConfig {
     uint64_t getDeviceMemCapabilities() override;
     uint64_t getSingleDeviceSharedMemCapabilities() override;
     uint64_t getCrossDeviceSharedMemCapabilities() override;
-    uint64_t getSharedSystemMemCapabilities(const HardwareInfo *hwInfo) override;
     void getKernelExtendedProperties(uint32_t *fp16, uint32_t *fp32, uint32_t *fp64) override;
-    std::vector<int32_t> getKernelSupportedThreadArbitrationPolicies() override;
+    std::vector<uint32_t> getKernelSupportedThreadArbitrationPolicies() override;
+    uint64_t getSharedSystemMemCapabilities() override;
     void convertTimestampsFromOaToCsDomain(uint64_t &timestampData) override;
     uint32_t getDeviceMemoryMaxClkRate(const HardwareInfo *hwInfo) override;
     bool isAdditionalStateBaseAddressWARequired(const HardwareInfo &hwInfo) const override;
@@ -131,7 +112,6 @@ class HwInfoConfigHw : public HwInfoConfig {
     bool obtainBlitterPreference(const HardwareInfo &hwInfo) const override;
     bool isBlitterFullySupported(const HardwareInfo &hwInfo) const override;
     bool isPageTableManagerSupported(const HardwareInfo &hwInfo) const override;
-    bool overrideGfxPartitionLayoutForWsl() const override;
     uint32_t getHwRevIdFromStepping(uint32_t stepping, const HardwareInfo &hwInfo) const override;
     uint32_t getSteppingFromHwRevId(const HardwareInfo &hwInfo) const override;
     uint32_t getAubStreamSteppingFromHwRevId(const HardwareInfo &hwInfo) const override;
@@ -139,14 +119,13 @@ class HwInfoConfigHw : public HwInfoConfig {
     bool isDefaultEngineTypeAdjustmentRequired(const HardwareInfo &hwInfo) const override;
     std::string getDeviceMemoryName() const override;
     bool isDisableOverdispatchAvailable(const HardwareInfo &hwInfo) const override;
-    bool allowCompression(const HardwareInfo &hwInfo) const override;
+    bool allowRenderCompression(const HardwareInfo &hwInfo) const override;
     bool allowStatelessCompression(const HardwareInfo &hwInfo) const override;
     LocalMemoryAccessMode getLocalMemoryAccessMode(const HardwareInfo &hwInfo) const override;
     bool isAllocationSizeAdjustmentRequired(const HardwareInfo &hwInfo) const override;
     bool isPrefetchDisablingRequired(const HardwareInfo &hwInfo) const override;
     bool isNewResidencyModelSupported() const override;
-    bool isDirectSubmissionSupported(const HardwareInfo &hwInfo) const override;
-    std::pair<bool, bool> isPipeControlPriorToNonPipelinedStateCommandsWARequired(const HardwareInfo &hwInfo, bool isRcs) const override;
+    bool isPipeControlPriorToNonPipelinedStateCommandsWARequired(const HardwareInfo &hwInfo, bool isRcs) const override;
     bool heapInLocalMem(const HardwareInfo &hwInfo) const override;
     void setCapabilityCoherencyFlag(const HardwareInfo &hwInfo, bool &coherencyFlag) override;
     bool isAdditionalMediaSamplerProgrammingRequired() const override;
@@ -160,24 +139,11 @@ class HwInfoConfigHw : public HwInfoConfig {
     bool isStorageInfoAdjustmentRequired() const override;
     bool isBlitterForImagesSupported() const override;
     bool isTile64With3DSurfaceOnBCSSupported(const HardwareInfo &hwInfo) const override;
-    bool isDcFlushAllowed() const override;
-    uint32_t computeMaxNeededSubSliceSpace(const HardwareInfo &hwInfo) const override;
-    bool getUuid(Device *device, std::array<uint8_t, HwInfoConfig::uuidSize> &uuid) const override;
-    bool isFlushTaskAllowed() const override;
-    bool programAllStateComputeCommandFields() const override;
-    bool isSpecialPipelineSelectModeChanged(const HardwareInfo &hwInfo) const override;
-    bool isSystolicModeConfigurable(const HardwareInfo &hwInfo) const override;
-    bool isGlobalFenceAsPostSyncOperationInComputeWalkerRequired(const HardwareInfo &hwInfo) const override;
-    bool isComputeDispatchAllWalkerEnableInComputeWalkerRequired(const HardwareInfo &hwInfo) const override;
-    bool isGlobalFenceAsMiMemFenceCommandInCommandStreamRequired(const HardwareInfo &hwInfo) const override;
-    bool isAdjustProgrammableIdPreferredSlmSizeRequired(const HardwareInfo &hwInfo) const override;
-    bool isThreadEuRatio16ForScratchRequired(const HardwareInfo &hwInfo) const override;
-    bool isComputeDispatchAllWalkerEnableInCfeStateRequired(const HardwareInfo &hwInfo) const override;
 
   protected:
     HwInfoConfigHw() = default;
 
-    void enableCompression(HardwareInfo *hwInfo);
+    void enableRenderCompression(HardwareInfo *hwInfo);
     void enableBlitterOperationsSupport(HardwareInfo *hwInfo);
     uint64_t getHostMemCapabilitiesValue();
     bool getHostMemCapabilitiesSupported(const HardwareInfo *hwInfo);

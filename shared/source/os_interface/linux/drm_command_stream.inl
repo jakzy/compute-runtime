@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -57,10 +57,6 @@ DrmCommandStreamReceiver<GfxFamily>::DrmCommandStreamReceiver(ExecutionEnvironme
 
     this->dispatchMode = localMemoryEnabled ? DispatchMode::BatchedDispatch : DispatchMode::ImmediateDispatch;
 
-    if (ApiSpecificConfig::getApiType() == ApiSpecificConfig::L0) {
-        this->dispatchMode = DispatchMode::ImmediateDispatch;
-    }
-
     if (DebugManager.flags.CsrDispatchMode.get()) {
         this->dispatchMode = static_cast<DispatchMode>(DebugManager.flags.CsrDispatchMode.get());
     }
@@ -81,14 +77,14 @@ DrmCommandStreamReceiver<GfxFamily>::DrmCommandStreamReceiver(ExecutionEnvironme
 }
 
 template <typename GfxFamily>
-SubmissionStatus DrmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchBuffer, ResidencyContainer &allocationsForResidency) {
+bool DrmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchBuffer, ResidencyContainer &allocationsForResidency) {
     this->printDeviceIndex();
     DrmAllocation *alloc = static_cast<DrmAllocation *>(batchBuffer.commandBufferAllocation);
     DEBUG_BREAK_IF(!alloc);
 
     BufferObject *bb = alloc->getBO();
     if (bb == nullptr) {
-        return SubmissionStatus::OUT_OF_MEMORY;
+        return false;
     }
 
     if (this->lastSentSliceCount != batchBuffer.sliceCount) {
@@ -106,39 +102,17 @@ SubmissionStatus DrmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchBu
 
     this->printBOsForSubmit(allocationsForResidency, *batchBuffer.commandBufferAllocation);
 
-    MemoryOperationsStatus retVal = memoryOperationsInterface->mergeWithResidencyContainer(this->osContext, allocationsForResidency);
-    if (retVal != MemoryOperationsStatus::SUCCESS) {
-        if (retVal == MemoryOperationsStatus::OUT_OF_MEMORY) {
-            return SubmissionStatus::OUT_OF_MEMORY;
-        }
-        return SubmissionStatus::FAILED;
-    }
+    memoryOperationsInterface->mergeWithResidencyContainer(this->osContext, allocationsForResidency);
 
     if (this->drm->isVmBindAvailable()) {
-        retVal = memoryOperationsInterface->makeResidentWithinOsContext(this->osContext, ArrayRef<GraphicsAllocation *>(&batchBuffer.commandBufferAllocation, 1), true);
-        if (retVal != MemoryOperationsStatus::SUCCESS) {
-            if (retVal == MemoryOperationsStatus::OUT_OF_MEMORY) {
-                return SubmissionStatus::OUT_OF_MEMORY;
-            }
-            return SubmissionStatus::FAILED;
-        }
+        memoryOperationsInterface->makeResidentWithinOsContext(this->osContext, ArrayRef<GraphicsAllocation *>(&batchBuffer.commandBufferAllocation, 1), true);
     }
 
     if (this->directSubmission.get()) {
-        this->startControllingDirectSubmissions();
-        bool ret = this->directSubmission->dispatchCommandBuffer(batchBuffer, *this->flushStamp.get());
-        if (ret == false) {
-            return SubmissionStatus::FAILED;
-        }
-        return SubmissionStatus::SUCCESS;
+        return this->directSubmission->dispatchCommandBuffer(batchBuffer, *this->flushStamp.get());
     }
     if (this->blitterDirectSubmission.get()) {
-        this->startControllingDirectSubmissions();
-        bool ret = this->blitterDirectSubmission->dispatchCommandBuffer(batchBuffer, *this->flushStamp.get());
-        if (ret == false) {
-            return SubmissionStatus::FAILED;
-        }
-        return SubmissionStatus::SUCCESS;
+        return this->blitterDirectSubmission->dispatchCommandBuffer(batchBuffer, *this->flushStamp.get());
     }
 
     if (isUserFenceWaitActive()) {
@@ -154,10 +128,10 @@ SubmissionStatus DrmCommandStreamReceiver<GfxFamily>::flush(BatchBuffer &batchBu
     }
 
     if (ret) {
-        return SubmissionStatus::FAILED;
+        return false;
     }
 
-    return SubmissionStatus::SUCCESS;
+    return true;
 }
 
 template <typename GfxFamily>
@@ -183,7 +157,7 @@ void DrmCommandStreamReceiver<GfxFamily>::printBOsForSubmit(ResidencyContainer &
 }
 
 template <typename GfxFamily>
-int DrmCommandStreamReceiver<GfxFamily>::exec(const BatchBuffer &batchBuffer, uint32_t vmHandleId, uint32_t drmContextId, uint32_t index) {
+int DrmCommandStreamReceiver<GfxFamily>::exec(const BatchBuffer &batchBuffer, uint32_t vmHandleId, uint32_t drmContextId) {
     DrmAllocation *alloc = static_cast<DrmAllocation *>(batchBuffer.commandBufferAllocation);
     DEBUG_BREAK_IF(!alloc);
     BufferObject *bb = alloc->getBO();
@@ -197,14 +171,6 @@ int DrmCommandStreamReceiver<GfxFamily>::exec(const BatchBuffer &batchBuffer, ui
         this->execObjectsStorage.resize(requiredSize);
     }
 
-    uint64_t completionGpuAddress = 0;
-    uint32_t completionValue = 0;
-    if (this->drm->isVmBindAvailable() &&
-        this->drm->completionFenceSupport()) {
-        completionGpuAddress = getTagAllocation()->getGpuAddress() + (index * this->postSyncWriteOffset) + Drm::completionFenceOffset;
-        completionValue = this->latestSentTaskCount;
-    }
-
     int ret = bb->exec(static_cast<uint32_t>(alignUp(batchBuffer.usedSize - batchBuffer.startOffset, 8)),
                        batchBuffer.startOffset, execFlags,
                        batchBuffer.requiresCoherency,
@@ -212,9 +178,7 @@ int DrmCommandStreamReceiver<GfxFamily>::exec(const BatchBuffer &batchBuffer, ui
                        vmHandleId,
                        drmContextId,
                        this->residency.data(), this->residency.size(),
-                       this->execObjectsStorage.data(),
-                       completionGpuAddress,
-                       completionValue);
+                       this->execObjectsStorage.data());
 
     this->residency.clear();
 
@@ -242,10 +206,7 @@ void DrmCommandStreamReceiver<GfxFamily>::makeNonResident(GraphicsAllocation &gf
             gfxAllocation.fragmentsStorage.fragmentStorageData[fragmentId].residency->resident[osContext->getContextId()] = false;
         }
     }
-
-    if (!gfxAllocation.isAlwaysResident(this->osContext->getContextId())) {
-        gfxAllocation.releaseResidencyInOsContext(this->osContext->getContextId());
-    }
+    gfxAllocation.releaseResidencyInOsContext(this->osContext->getContextId());
 }
 
 template <typename GfxFamily>

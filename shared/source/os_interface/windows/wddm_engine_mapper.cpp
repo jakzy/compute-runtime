@@ -15,11 +15,12 @@ namespace NEO {
 GPUNODE_ORDINAL WddmEngineMapper::engineNodeMap(aub_stream::EngineType engineType) {
     if (EngineHelpers::isCcs(engineType)) {
         return GPUNODE_CCS0;
-    } else if (aub_stream::ENGINE_BCS == engineType || EngineHelpers::isLinkBcs(engineType)) {
+    } else if (aub_stream::ENGINE_RCS == engineType) {
+        return GPUNODE_3D;
+    } else if (aub_stream::ENGINE_BCS == engineType) {
         return GPUNODE_BLT;
     }
-    UNRECOVERABLE_IF(engineType != aub_stream::ENGINE_RCS && engineType != aub_stream::ENGINE_CCCS);
-    return GPUNODE_3D;
+    UNRECOVERABLE_IF(true);
 }
 
 } // namespace NEO

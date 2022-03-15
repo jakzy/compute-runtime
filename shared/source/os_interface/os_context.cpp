@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Intel Corporation
+ * Copyright (C) 2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -61,10 +61,6 @@ void OsContext::ensureContextInitialized() {
 
 bool OsContext::isDirectSubmissionAvailable(const HardwareInfo &hwInfo, bool &submitOnInit) {
     bool enableDirectSubmission = this->isDirectSubmissionSupported(hwInfo);
-
-    if (DebugManager.flags.SetCommandStreamReceiver.get() > 0) {
-        enableDirectSubmission = false;
-    }
 
     if (DebugManager.flags.EnableDirectSubmission.get() != -1) {
         enableDirectSubmission = DebugManager.flags.EnableDirectSubmission.get();

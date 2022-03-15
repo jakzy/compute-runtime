@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Intel Corporation
+ * Copyright (C) 2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -9,7 +9,6 @@
 
 #include "shared/source/debug_settings/debug_settings_manager.h"
 #include "shared/source/helpers/debug_helpers.h"
-#include "shared/source/os_interface/device_factory.h"
 #include "shared/source/utilities/stackvec.h"
 
 #include <cstdlib>
@@ -25,8 +24,13 @@ bool canUseAdapterBasedOnDriverDesc(const char *driverDescription) {
 }
 
 bool isAllowedDeviceId(uint32_t deviceId) {
-    return DeviceFactory::isAllowedDeviceId(deviceId, DebugManager.flags.FilterDeviceId.get()) &&
-           DeviceFactory::isAllowedDeviceId(deviceId, DebugManager.flags.ForceDeviceId.get());
+    if (DebugManager.flags.ForceDeviceId.get() == "unk") {
+        return true;
+    }
+
+    char *endptr = nullptr;
+    auto reqDeviceId = strtoul(DebugManager.flags.ForceDeviceId.get().c_str(), &endptr, 16);
+    return (static_cast<uint32_t>(reqDeviceId) == deviceId);
 }
 
 } // namespace NEO

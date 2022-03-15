@@ -9,7 +9,12 @@
 #include "shared/source/os_interface/os_library.h"
 
 namespace NEO {
+
+#ifdef NET_BSD
+namespace NetBSD {
+#else
 namespace Linux {
+#endif
 
 void adjustLibraryFlags(int &dlopenFlag);
 
@@ -24,5 +29,5 @@ class OsLibrary : public NEO::OsLibrary {
     bool isLoaded() override;
     void *getProcAddress(const std::string &procName) override;
 };
-} // namespace Linux
+} // namespace Linux/NetBSD
 } // namespace NEO

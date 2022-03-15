@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019-2022 Intel Corporation
+# Copyright (C) 2019-2021 Intel Corporation
 #
 # SPDX-License-Identifier: MIT
 #
@@ -8,10 +8,7 @@ set(NEO_CORE_OS_INTERFACE_LINUX
     ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/allocator_helper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/cache_info.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/cache_info_impl.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/clos_cache.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/clos_cache.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/clos_helper.h
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}cache_info_impl.h
     ${CMAKE_CURRENT_SOURCE_DIR}/device_command_stream.inl
     ${CMAKE_CURRENT_SOURCE_DIR}/device_time_drm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/device_time_drm.h
@@ -19,18 +16,19 @@ set(NEO_CORE_OS_INTERFACE_LINUX
     ${CMAKE_CURRENT_SOURCE_DIR}/driver_info_linux.h
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_allocation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_allocation.h
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_allocation_extended.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_buffer_object.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_buffer_object.h
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_buffer_object_extended.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_command_stream.h
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_command_stream.inl
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_command_stream_bdw_and_later.inl
-    ${CMAKE_CURRENT_SOURCE_DIR}/drm_debug.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/drm_debug.h
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_gem_close_worker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_gem_close_worker.h
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_manager.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/drm_engine_mapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_engine_mapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_engine_mapper.h
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_neo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_neo.cpp
@@ -40,25 +38,17 @@ set(NEO_CORE_OS_INTERFACE_LINUX
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_operations_handler_bind.h
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_operations_handler_default.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_operations_handler_default.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_manager_create_multi_host_allocation.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_memory_manager_local_memory.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_operations_handler_create.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_query.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_memory_operations_handler_create.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_query_extended.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/hw_info_config_drm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/hw_device_id.h
     ${CMAKE_CURRENT_SOURCE_DIR}/hw_device_id_linux.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/kmd_notify_properties_linux.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/linux_inc.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_helper.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_helper.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_helper_prelim.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}ioctl_helper_getter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_strings.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_strings_prelim.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/engine_info.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/engine_info.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}engine_info_impl.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/flags${BRANCH_DIR_SUFFIX}drm_query_flags.h
     ${CMAKE_CURRENT_SOURCE_DIR}/memory_info.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/memory_info.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/os_context_linux.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/os_context_linux.h
     ${CMAKE_CURRENT_SOURCE_DIR}/os_inc.h
@@ -84,16 +74,11 @@ set(NEO_CORE_OS_INTERFACE_LINUX
     ${CMAKE_CURRENT_SOURCE_DIR}/settings_reader_create.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/sys_calls.h
     ${CMAKE_CURRENT_SOURCE_DIR}/system_info.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/system_info.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/pmt_util.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/pmt_util.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}/system_info_extended.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}system_info_impl.h
 )
-
 if(SUPPORT_XEHP_AND_LATER)
   list(APPEND NEO_CORE_OS_INTERFACE_LINUX
        ${CMAKE_CURRENT_SOURCE_DIR}/drm_command_stream_xehp_and_later.inl
-       ${CMAKE_CURRENT_SOURCE_DIR}/hw_info_config_uuid_xehp_and_later.inl
   )
 endif()
 
@@ -108,20 +93,22 @@ else()
   )
 endif()
 
-if("${BRANCH_TYPE}" STREQUAL "")
+if(I915_LOCAL_MEM_EXP)
   list(APPEND NEO_CORE_OS_INTERFACE_LINUX
-       ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_helper_upstream.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_manager_local_memory_exp.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/drm_memory_manager_create_multi_host_allocation_exp.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/drm_query_exp.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/drm_tip.h
+       ${CMAKE_CURRENT_SOURCE_DIR}/memory_info_impl.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/local_memory_helper.h
+       ${CMAKE_CURRENT_SOURCE_DIR}/local_memory_helper.cpp
   )
-  if(NOT NEO_ENABLE_i915_PRELIM_DETECTION)
-    list(APPEND NEO_CORE_OS_INTERFACE_LINUX
-         ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_helper_getter_upstream.cpp
-         ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_strings_upstream.cpp
-    )
-    list(REMOVE_ITEM NEO_CORE_OS_INTERFACE_LINUX
-         ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_helper_getter.cpp
-         ${CMAKE_CURRENT_SOURCE_DIR}/ioctl_strings_prelim.cpp
-    )
-  endif()
+else()
+  list(APPEND NEO_CORE_OS_INTERFACE_LINUX
+       ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_memory_manager_local_memory.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_memory_manager_create_multi_host_allocation.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}${BRANCH_DIR_SUFFIX}drm_query.cpp
+  )
 endif()
 
 set_property(GLOBAL PROPERTY NEO_CORE_OS_INTERFACE_LINUX ${NEO_CORE_OS_INTERFACE_LINUX})

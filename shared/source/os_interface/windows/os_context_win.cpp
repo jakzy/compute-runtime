@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2022 Intel Corporation
+ * Copyright (C) 2020-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -38,15 +38,8 @@ void OsContextWin::initializeContext() {
     UNRECOVERABLE_IF(!residencyController.isInitialized());
 };
 
-void OsContextWin::reInitializeContext() {
-    if (contextInitialized && (false == this->wddm.skipResourceCleanup())) {
-        wddm.destroyContext(wddmContextHandle);
-    }
-    UNRECOVERABLE_IF(!wddm.createContext(*this));
-};
-
 OsContextWin::~OsContextWin() {
-    if (contextInitialized && (false == this->wddm.skipResourceCleanup())) {
+    if (contextInitialized) {
         wddm.getWddmInterface()->destroyHwQueue(hardwareQueue.handle);
         wddm.getWddmInterface()->destroyMonitorFence(residencyController.getMonitoredFence());
         wddm.destroyContext(wddmContextHandle);

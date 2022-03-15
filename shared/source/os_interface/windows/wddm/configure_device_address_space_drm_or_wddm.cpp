@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Intel Corporation
+ * Copyright (C) 2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -14,7 +14,6 @@
 #include "shared/source/gmm_helper/resource_info.h"
 #include "shared/source/helpers/hw_info.h"
 #include "shared/source/helpers/windows/gmm_callbacks.h"
-#include "shared/source/os_interface/hw_info_config.h"
 #include "shared/source/os_interface/linux/allocator_helper.h"
 #include "shared/source/os_interface/windows/gdi_interface.h"
 #include "shared/source/os_interface/windows/gfx_escape_wrapper.h"
@@ -83,9 +82,8 @@ bool tryWritePartitionLayoutWithinProcess(Wddm &wddm, GMM_GFX_PARTITIONING &part
     return synchronizePartitionLayoutWithinProcess(wddm, partitionLayout, GfxSynchPartitionInfoEscapeHeader::actionSet);
 }
 
-bool adjustGfxPartitionLayout(GMM_GFX_PARTITIONING &partitionLayout, uint64_t gpuAddressSpace, uintptr_t minAllowedAddress, Wddm &wddm, PRODUCT_FAMILY productFamily) {
-    bool requiresRepartitioning = (gpuAddressSpace == maxNBitValue(47)) && wddm.getFeatureTable().flags.ftrCCSRing;
-    requiresRepartitioning |= HwInfoConfig::get(productFamily)->overrideGfxPartitionLayoutForWsl();
+bool adjustGfxPartitionLayout(GMM_GFX_PARTITIONING &partitionLayout, uint64_t gpuAddressSpace, uintptr_t minAllowedAddress, Wddm &wddm) {
+    bool requiresRepartitioning = (gpuAddressSpace == maxNBitValue(47)) && wddm.getFeatureTable().ftrCCSRing;
     if (false == requiresRepartitioning) {
         return true;
     }
@@ -108,11 +106,11 @@ bool adjustGfxPartitionLayout(GMM_GFX_PARTITIONING &partitionLayout, uint64_t gp
     const auto cpuAddressRangeSizeToReserve = getSizeToReserve();
 
     void *reservedRangeBase = nullptr;
-    if (false == wddm.reserveValidAddressRange(cpuAddressRangeSizeToReserve + 2 * MemoryConstants::megaByte, reservedRangeBase)) {
+    if (false == wddm.reserveValidAddressRange(cpuAddressRangeSizeToReserve + GfxPartition::heapGranularity - 1, reservedRangeBase)) {
         DEBUG_BREAK_IF(true);
         return false;
     }
-    auto reservedRangeBaseAligned = alignUp(reservedRangeBase, 2 * MemoryConstants::megaByte);
+    auto reservedRangeBaseAligned = alignUp(reservedRangeBase, GfxPartition::heapGranularity);
 
     auto gfxBase = reinterpret_cast<uint64_t>(reservedRangeBaseAligned);
     auto gfxTop = gfxBase + cpuAddressRangeSizeToReserve;
@@ -161,7 +159,7 @@ bool ensureGpuAddressRangeIsReserved(uint64_t address, size_t size, D3DKMT_HANDL
         rangeDesc.MaximumAddress = alignUp(address + size, MemoryConstants::pageSize64k);
         rangeDesc.Size = MemoryConstants::pageSize64k;
         status = gdi.reserveGpuVirtualAddress(&rangeDesc);
-        if (status == STATUS_SUCCESS) {
+        if (status != STATUS_SUCCESS) {
             DEBUG_BREAK_IF(true);
             return false;
         }
@@ -196,7 +194,7 @@ bool Wddm::configureDeviceAddressSpace() {
     }
 
     if (maxUsmSize > 0) {
-        if (false == adjustGfxPartitionLayout(this->gfxPartition, gpuAddressSpace, usmBase, *this, gfxPlatform->eProductFamily)) {
+        if (false == adjustGfxPartitionLayout(this->gfxPartition, gpuAddressSpace, usmBase, *this)) {
             return false;
         }
         if (gfxPartition.Standard64KB.Limit <= maxUsmSize) {
@@ -223,7 +221,7 @@ bool Wddm::configureDeviceAddressSpace() {
     }
 
     uintptr_t addr = 0;
-    auto ret = gmmMemory->configureDevice(getAdapter(), device, getGdi()->escape, maxUsmSize, featureTable->flags.ftrL3IACoherency, addr, false);
+    auto ret = gmmMemory->configureDevice(getAdapter(), device, getGdi()->escape, maxUsmSize, featureTable->ftrL3IACoherency, addr, false);
     return ret;
 }
 

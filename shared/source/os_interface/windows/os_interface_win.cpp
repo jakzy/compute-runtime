@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -17,5 +17,4 @@ bool OSInterface::requiresSupportForWddmTrimNotification = true;
 bool OSInterface::isDebugAttachAvailable() const {
     return false;
 }
-
 } // namespace NEO

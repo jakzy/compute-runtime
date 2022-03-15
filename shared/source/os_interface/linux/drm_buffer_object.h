@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  *
  * SPDX-License-Identifier: MIT
  *
@@ -46,8 +46,7 @@ class BufferObject {
     int pin(BufferObject *const boToPin[], size_t numberOfBos, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId);
     MOCKABLE_VIRTUAL int validateHostPtr(BufferObject *const boToPin[], size_t numberOfBos, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId);
 
-    MOCKABLE_VIRTUAL int exec(uint32_t used, size_t startOffset, unsigned int flags, bool requiresCoherency, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId,
-                              BufferObject *const residency[], size_t residencyCount, drm_i915_gem_exec_object2 *execObjectsStorage, uint64_t completionGpuAddress, uint32_t completionValue);
+    int exec(uint32_t used, size_t startOffset, unsigned int flags, bool requiresCoherency, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId, BufferObject *const residency[], size_t residencyCount, drm_i915_gem_exec_object2 *execObjectsStorage);
 
     int bind(OsContext *osContext, uint32_t vmHandleId);
     int unbind(OsContext *osContext, uint32_t vmHandleId);
@@ -77,7 +76,7 @@ class BufferObject {
     bool peekIsReusableAllocation() const { return this->isReused; }
     void markAsReusableAllocation() { this->isReused = true; }
     void addBindExtHandle(uint32_t handle);
-    const StackVec<uint32_t, 2> &getBindExtHandles() const { return bindExtHandles; }
+    StackVec<uint32_t, 2> &getBindExtHandles() { return bindExtHandles; }
     void markForCapture() {
         allowCapture = true;
     }
@@ -90,22 +89,6 @@ class BufferObject {
     }
     void requireImmediateBinding(bool required) {
         requiresImmediateBinding = required;
-    }
-
-    bool isExplicitResidencyRequired() {
-        return requiresExplicitResidency;
-    }
-    void requireExplicitResidency(bool required) {
-        requiresExplicitResidency = required;
-    }
-    void setRootDeviceIndex(uint32_t index) {
-        rootDeviceIndex = index;
-    }
-    uint32_t getRootDeviceIndex() {
-        return rootDeviceIndex;
-    }
-    int getHandle() {
-        return handle;
     }
 
     void setCacheRegion(CacheRegion regionIndex) { cacheRegion = regionIndex; }
@@ -142,21 +125,18 @@ class BufferObject {
     bool perContextVmsUsed = false;
     std::atomic<uint32_t> refCount;
 
-    uint32_t rootDeviceIndex = std::numeric_limits<uint32_t>::max();
     int handle; // i915 gem object handle
     uint64_t size;
     bool isReused;
 
     //Tiling
-    uint32_t tilingMode;
+    uint32_t tiling_mode;
     bool allowCapture = false;
     bool requiresImmediateBinding = false;
-    bool requiresExplicitResidency = false;
 
     uint32_t getOsContextId(OsContext *osContext);
     MOCKABLE_VIRTUAL void fillExecObject(drm_i915_gem_exec_object2 &execObject, OsContext *osContext, uint32_t vmHandleId, uint32_t drmContextId);
     void fillExecObjectImpl(drm_i915_gem_exec_object2 &execObject, OsContext *osContext, uint32_t vmHandleId);
-    void printBOBindingResult(OsContext *osContext, uint32_t vmHandleId, bool bind, int retVal);
 
     void *lockedAddress; // CPU side virtual address
 
